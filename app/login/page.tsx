@@ -1,3 +1,4 @@
+import PasswordInput from "./PasswordInput";
 import { login } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -65,7 +66,7 @@ export default async function LoginPage({
           color: var(--text);
           font: inherit;
         }
-        button {
+        button[type="submit"] {
           width: 100%;
           margin-top: 6px;
           padding: 9px 12px;
@@ -77,6 +78,24 @@ export default async function LoginPage({
           font-weight: 600;
           cursor: pointer;
         }
+        .pw-wrap { position: relative; }
+        .pw-wrap input { padding-right: 40px; }
+        .pw-eye {
+          position: absolute;
+          top: 0;
+          right: 0;
+          height: 38px;
+          width: 38px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 0;
+          background: none;
+          color: var(--text);
+          opacity: 0.55;
+          cursor: pointer;
+        }
+        .pw-eye:hover, .pw-eye:focus-visible { opacity: 1; }
         .err {
           margin: 0 0 16px;
           padding: 8px 10px;
@@ -99,7 +118,7 @@ export default async function LoginPage({
           <label htmlFor="username">Username</label>
           <input id="username" name="username" autoComplete="username" required autoFocus />
           <label htmlFor="password">Password</label>
-          <input id="password" name="password" type="password" autoComplete="current-password" required />
+          <PasswordInput />
           <button type="submit">Sign in</button>
         </form>
       </main>
