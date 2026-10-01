@@ -16,14 +16,14 @@ On 2026-10-01 this returned **309** companies.
 
 | Tab | Rule |
 |---|---|
-| Northeast / NY / NJ / Mid-Atlantic | `territory` is that value AND `territory_status` is `In territory` **or blank** |
-| Out of Territory | `territory_status` is `Out of territory` or `Approved holdover` (any territory), **or** `territory` is a former territory (`Northwest`, which John used to own), whatever the status. Former-territory rows show a "Former territory" pill |
+| Northeast / NY / NJ / Mid-Atlantic / Northwest | `territory` is that value AND `territory_status` is `In territory` **or blank** |
+| Out of Territory | `territory_status` is `Out of territory` or `Approved holdover` (any territory) |
 | *(unmapped)* | Anything else, e.g. `territory` = North Central with status `In territory`. Shown only as the footer flag "⚑ n unmapped" with names on hover |
 
 Blank-status accounts carry a ⚑ next to the name ("Territory Status is not set").
 
-Snapshot on 2026-10-01 (309 total): Northeast 63, NY / NJ 83, Mid-Atlantic 90, Out of Territory 70 (43 by status + 27 Northwest), unmapped 3.
-- 52 of the territory-tab accounts have a blank `territory_status` (38 John's, 14 Jeff's).
+Snapshot on 2026-10-01 (309 total): Northeast 63, NY / NJ 83, Mid-Atlantic 90, Northwest 27 (John's former territory; 22 In territory + 5 blank status), Out of Territory 43, unmapped 3.
+- 57 of the territory-tab accounts have a blank `territory_status` (43 John's, 14 Jeff's).
 - The 3 unmapped accounts break down as:
   - North Central: 1
   - Southwest: 1

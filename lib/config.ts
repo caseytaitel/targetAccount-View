@@ -13,14 +13,13 @@ export function recordUrl(companyId: string): string {
 /** Company owners in scope (hubspot_owner_id). Names are resolved live from HubSpot. */
 export const OWNER_IDS = ["92943931", "84759471"] as const; // Jeff Pala, John Greene
 
-export const TERRITORIES = ["Northeast", "NY / NJ", "Mid-Atlantic"] as const;
+/** Northwest is John's former territory; it gets its own tab (Casey, 2026-10-01). */
+export const TERRITORIES = ["Northeast", "NY / NJ", "Mid-Atlantic", "Northwest"] as const;
 export type Territory = (typeof TERRITORIES)[number];
 
 export const IN_TERRITORY = "In territory";
 /** territory_status values that send an account to the Out of Territory tab. */
 export const OUT_OF_TERRITORY_STATUSES = ["Out of territory", "Approved holdover"] as const;
-/** Territories John used to own. Out of Territory whatever territory_status says (Casey, 2026-10-01). */
-export const FORMER_TERRITORIES = ["Northwest"] as const;
 
 export const OUT_TAB = "out" as const;
 export type TabKey = Territory | typeof OUT_TAB;

@@ -1,7 +1,7 @@
 # Target Account View
 
 A shared working view of HubSpot target accounts for Casey, John Greene and Jeff Pala.
-Accounts are split by territory, then grouped into Tiers A / B / C. Each row tracks outreach
+Accounts are split by territory (Northeast, NY / NJ, Mid-Atlantic, Northwest, Out of Territory), then grouped into Tiers A / B / C. Each row tracks outreach
 ownership, outreach status and a revisit date, and has a notes drawer that syncs with the
 HubSpot company `notes` property.
 

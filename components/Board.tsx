@@ -27,6 +27,7 @@ const TAB_LABEL: Record<TabKey, string> = {
   Northeast: "Northeast",
   "NY / NJ": "NY / NJ",
   "Mid-Atlantic": "Mid-Atlantic",
+  Northwest: "Northwest",
   [OUT_TAB]: "Out of Territory",
 };
 const TAB_ORDER: TabKey[] = [...TERRITORIES, OUT_TAB];
@@ -540,15 +541,9 @@ function Row({
         <td>
           <div>{a.territory || <span className="muted">no territory</span>}</div>
           <div className="co-sub">
-            {a.territoryStatus === "Approved holdover" || a.territoryStatus === "Out of territory" ? (
-              <span className={`pill ${a.territoryStatus === "Approved holdover" ? "pill-hold" : "pill-out"}`}>
-                {a.territoryStatus}
-              </span>
-            ) : (
-              <span className="pill pill-muted" title={`Territory Status in HubSpot: ${a.territoryStatus || "not set"}`}>
-                Former territory
-              </span>
-            )}
+            <span className={`pill ${a.territoryStatus === "Approved holdover" ? "pill-hold" : "pill-out"}`}>
+              {a.territoryStatus}
+            </span>
           </div>
         </td>
       )}

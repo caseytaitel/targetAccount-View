@@ -4,7 +4,6 @@
  */
 
 import {
-  FORMER_TERRITORIES,
   HIRING_FIELDS,
   IN_TERRITORY,
   OUT_OF_TERRITORY_STATUSES,
@@ -159,18 +158,14 @@ export function toAccount(
  * (shown as the quiet "unmapped" flag so nothing silently disappears).
  *
  * - Out of Territory: territory_status is Out of territory or Approved holdover,
- *   whatever the territory says; or territory is a former territory (Northwest),
- *   whatever the status says.
- * - Territory tab: territory is one of the three and territory_status is In territory or
+ *   whatever the territory says.
+ * - Territory tab: territory is one of the four (TERRITORIES) and territory_status is In territory or
  *   blank. Blank-status rows carry a quiet "status not set" flag (statusMissing). On
  *   2026-10-01, 52 of 309 accounts had a blank status; hiding them would have dropped a
  *   sixth of the book from view.
  */
 export function bucket(a: Pick<Account, "territory" | "territoryStatus">): TabKey | null {
-  if (
-    (OUT_OF_TERRITORY_STATUSES as readonly string[]).includes(a.territoryStatus) ||
-    (FORMER_TERRITORIES as readonly string[]).includes(a.territory)
-  ) {
+  if ((OUT_OF_TERRITORY_STATUSES as readonly string[]).includes(a.territoryStatus)) {
     return OUT_TAB;
   }
   const statusOk = a.territoryStatus === IN_TERRITORY || a.territoryStatus === "";

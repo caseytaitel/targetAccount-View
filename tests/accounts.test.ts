@@ -15,9 +15,10 @@ describe("bucket", () => {
     expect(bucket({ territory: "", territoryStatus: "Out of territory" })).toBe("out");
   });
 
-  it("sends former territories (Northwest) to the Out tab whatever the status", () => {
-    expect(bucket({ territory: "Northwest", territoryStatus: "In territory" })).toBe("out");
-    expect(bucket({ territory: "Northwest", territoryStatus: "" })).toBe("out");
+  it("gives Northwest its own tab when In territory, and Out of Territory when marked out", () => {
+    expect(bucket({ territory: "Northwest", territoryStatus: "In territory" })).toBe("Northwest");
+    expect(bucket({ territory: "Northwest", territoryStatus: "" })).toBe("Northwest");
+    expect(bucket({ territory: "Northwest", territoryStatus: "Out of territory" })).toBe("out");
   });
 
   it("keeps a blank-status account on its territory tab", () => {
