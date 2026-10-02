@@ -18,7 +18,7 @@ On 2026-10-01 this returned **309** companies.
 |---|---|
 | Northeast / NY / NJ / Mid-Atlantic / Northwest | `territory` is that value AND `territory_status` is `In territory` **or blank** |
 | Out of Territory | `territory_status` is `Out of territory` or `Approved holdover` (any territory) |
-| *(unmapped)* | Anything else, e.g. `territory` = North Central with status `In territory`. Shown only as the footer flag "⚑ n unmapped" with names on hover |
+| *(unmapped)* | Anything else, e.g. `territory` = North Central with status `In territory`. On no territory tab. All appear on Data Hygiene V2; blank-territory ones also on Data Hygiene |
 
 Blank-status accounts carry a ⚑ next to the name ("Territory Status is not set").
 
@@ -27,6 +27,19 @@ Blank-status accounts carry a ⚑ next to the name ("Territory Status is not set
 Not a bucket: a cross-cut of the whole population. An account is listed when `territory` is blank
 **or** `territory_status` is blank, so it can also appear on a territory tab (blank status) or in
 the unmapped count (blank territory).
+
+### Data Hygiene V2 (`hygieneIssue()` in `lib/territory.ts`)
+
+Runs beside the original tab for comparison. Two sections; each account sits in one, Missing first:
+
+| Section | Rule |
+|---|---|
+| Missing values | `needsHygiene()` above |
+| Status conflict | Both set, but `bucket()` returns null: `territory_status` = `In territory` for a territory with no tab (e.g. North Central, Southwest). 2 accounts on 2026-10-01 |
+
+Fixing a conflict overwrites a set value (usually `territory_status` → `Out of territory`, which
+moves it to Out of Territory). The same write route handles it; the confirm modal lists the value
+being replaced.
 
 Checked live in HubSpot on 2026-10-01: **58** blank `territory_status`, **1** blank `territory`
 (Hawaiian Airlines, which also has a blank status), so the tab held 58 accounts. Blank territory is
@@ -113,6 +126,8 @@ The Revisit later section always sorts soonest first.
 ## Verification
 
 - `npm test`
-- The tab counts plus the unmapped count equal the HubSpot total for the Population filter above.
+- The header shows each owner's count and the total; the owner counts sum to the total.
+- The tab counts plus the unmapped accounts (`bucket()` returns null) equal the HubSpot total for the Population filter above.
 - Spot-check: Washington Metropolitan Area Transit Authority shows Event attendee with two events.
+- Data Hygiene V2 count = Data Hygiene count + the conflict accounts (`bucket()` null with both values set).
 - Data Hygiene count equals a HubSpot search of the Population filter with `territory` or `territory_status` unknown.

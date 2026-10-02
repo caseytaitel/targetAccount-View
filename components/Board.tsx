@@ -8,15 +8,17 @@ import type { BoardData } from "@/lib/load";
 import { today } from "@/lib/notes";
 import { DEFAULT_SORT, type Sort, type SortKey, comparator, isSort, nextSort } from "@/lib/sort";
 import type { AccountState, StateField } from "@/lib/state";
-import { type TerritoryValues, needsHygiene } from "@/lib/territory";
+import { type TerritoryValues, hygieneIssue, needsHygiene } from "@/lib/territory";
 
-import HygieneTable from "./HygieneTable";
+import HygieneTable, { type HygieneGroup } from "./HygieneTable";
 import NotesDrawer from "./NotesDrawer";
 import SortTh from "./SortTh";
 
-/** The territory tabs plus the Data Hygiene view, which is a cross-cut, not a bucket. */
+/** The territory tabs plus the Data Hygiene views, which are cross-cuts, not buckets. */
 const HYGIENE = "hygiene" as const;
-type View = TabKey | typeof HYGIENE;
+/** V2 runs beside V1 so the two can be compared; keep one once Casey picks. */
+const HYGIENE_V2 = "hygiene-v2" as const;
+type View = TabKey | typeof HYGIENE | typeof HYGIENE_V2;
 type Tip = { lines: string[]; x: number; y: number };
 type SectionKey = (typeof TIERS)[number] | "untiered" | "revisit";
 
@@ -27,8 +29,13 @@ const TAB_LABEL: Record<View, string> = {
   Northwest: "Northwest",
   [OUT_TAB]: "Out of Territory",
   [HYGIENE]: "Data Hygiene",
+  [HYGIENE_V2]: "Data Hygiene V2",
 };
-const TAB_ORDER: View[] = [...TERRITORIES, OUT_TAB, HYGIENE];
+const TAB_ORDER: View[] = [...TERRITORIES, OUT_TAB, HYGIENE, HYGIENE_V2];
+const TAB_TITLE: Partial<Record<View, string>> = {
+  [HYGIENE]: "Accounts with a blank Territory or Territory Status in HubSpot",
+  [HYGIENE_V2]: "Blank Territory / Territory Status, plus In territory accounts whose territory has no tab",
+};
 
 const SECTIONS: { key: SectionKey; label: string; def?: string }[] = [
   { key: "A", label: "Tier A" },
@@ -98,18 +105,22 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
     return groups;
   }, [data.accounts]);
 
+  /** [ownerId, ownerName, account count], sorted by name. */
   const owners = useMemo(() => {
-    const m = new Map<string, string>();
+    const m = new Map<string, { name: string; count: number }>();
     for (const a of data.accounts) {
       if (a.ownerId) {
-        m.set(a.ownerId, a.ownerName);
+        const o = m.get(a.ownerId) ?? { name: a.ownerName, count: 0 };
+        m.set(a.ownerId, { ...o, count: o.count + 1 });
       }
     }
-    return [...m.entries()].sort((x, y) => x[1].localeCompare(y[1]));
+    return [...m.entries()]
+      .map(([id, o]) => [id, o.name, o.count] as const)
+      .sort((x, y) => x[1].localeCompare(y[1]));
   }, [data.accounts]);
 
-  const unmapped = byTab.get(null) ?? [];
   const hygiene = useMemo(() => data.accounts.filter(needsHygiene), [data.accounts]);
+  const hygieneV2 = useMemo(() => data.accounts.filter((a) => hygieneIssue(a) !== null), [data.accounts]);
 
   const passesFilters = useCallback(
     (a: Account) => {
@@ -132,8 +143,26 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
     [hygiene, passesFilters, sort, stateMap],
   );
 
+  const hygieneV2Groups = useMemo((): HygieneGroup[] => {
+    const rows = hygieneV2.filter(passesFilters).sort(comparator(sort, stateMap));
+    return [
+      {
+        key: "missing",
+        label: "Missing values",
+        def: "Territory or Territory Status is blank",
+        rows: rows.filter((a) => hygieneIssue(a) === "missing"),
+      },
+      {
+        key: "conflict",
+        label: "Status conflict",
+        def: "Status is In territory, but the territory has no tab here: set Out of territory, or fix the Territory",
+        rows: rows.filter((a) => hygieneIssue(a) === "conflict"),
+      },
+    ];
+  }, [hygieneV2, passesFilters, sort, stateMap]);
+
   const sections = useMemo(() => {
-    const rows = tab === HYGIENE ? [] : (byTab.get(tab) ?? []).filter(passesFilters);
+    const rows = tab === HYGIENE || tab === HYGIENE_V2 ? [] : (byTab.get(tab) ?? []).filter(passesFilters);
     const out: Record<SectionKey, Account[]> = { A: [], B: [], C: [], untiered: [], revisit: [] };
     for (const a of rows) {
       const st = stateMap[a.id] ?? {};
@@ -153,7 +182,7 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
     out.revisit.sort(
       (a, b) => (stateMap[a.id]?.revisit_on ?? "").localeCompare(stateMap[b.id]?.revisit_on ?? "") || cmp(a, b),
     );
-    return { out, shown: rows.length };
+    return { out };
   }, [byTab, tab, stateMap, passesFilters, sort, todayIso]);
 
   const chooseTab = (t: View) => {
@@ -260,11 +289,12 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
 
   const isOut = tab === OUT_TAB;
   const isHygiene = tab === HYGIENE;
+  const isHygieneV2 = tab === HYGIENE_V2;
   const colCount = isOut ? 11 : 10;
   const notesAccount = notesFor ? data.accounts.find((a) => a.id === notesFor) : undefined;
   const refreshedAt = new Date(data.fetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  const filtersOn = ownerFilter !== "" || outreachFilter !== "";
-  const tabCount = (t: View) => (t === HYGIENE ? hygiene.length : (byTab.get(t) ?? []).length);
+  const tabCount = (t: View) =>
+    t === HYGIENE ? hygiene.length : t === HYGIENE_V2 ? hygieneV2.length : (byTab.get(t) ?? []).length;
 
   return (
     <div className="container">
@@ -272,7 +302,7 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
         <div className="header-left">
           <h1>Target Accounts</h1>
           <p>
-            {owners.map(([, n]) => n).join(" & ")} · {data.accounts.length} target accounts
+            {owners.map(([, n, c]) => `${n} ${c}`).join(" · ")} · {data.accounts.length} target accounts
           </p>
         </div>
         <div className="header-right">
@@ -297,7 +327,7 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
               aria-selected={tab === t}
               className={`tab${tab === t ? " active" : ""}${t === OUT_TAB ? " tab-split" : ""}`}
               onClick={() => chooseTab(t)}
-              title={t === HYGIENE ? "Accounts with a blank Territory or Territory Status in HubSpot" : undefined}
+              title={TAB_TITLE[t]}
             >
               {TAB_LABEL[t]} <span className="cz">· {tabCount(t)}</span>
             </button>
@@ -333,22 +363,17 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
               Unassigned
             </button>
           </div>
-          {filtersOn && (
-            <button
-              className="fb-clear"
-              onClick={() => {
-                setOwnerFilter("");
-                setOutreachFilter("");
-              }}
-            >
-              Clear filters · {isHygiene ? hygieneRows.length : sections.shown} shown
-            </button>
-          )}
         </div>
 
-        {isHygiene ? (
+        {isHygiene || isHygieneV2 ? (
           <HygieneTable
-            rows={hygieneRows}
+            key={tab}
+            groups={isHygiene ? [{ key: "all", rows: hygieneRows }] : hygieneV2Groups}
+            emptyText={
+              isHygiene
+                ? "Every account in view has a Territory and a Territory Status."
+                : "Every account in view has both values set and fits a tab."
+            }
             options={data.territoryOptions}
             sort={sort}
             onSort={chooseSort}
@@ -437,27 +462,13 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
         )}
       </div>
 
-      <footer className="footer">
-        <span>
-          HubSpot is read-only here except company Notes and, on Data Hygiene, Territory and Territory
-          Status. Each is written only after you confirm.
-          {data.storeMode === "memory" && (
-            <span className="qflag" title="No Redis env vars found, so tier/outreach/revisit edits live in this dev server's memory and are lost on restart.">
-              {" "}⚑ dev store (not saved)
-            </span>
-          )}
-        </span>
-        {unmapped.length > 0 && (
-          <span
-            className="qflag"
-            title={`Not on any tab: territory is outside Northeast, NY / NJ, Mid-Atlantic and Northwest, and status is not Out of territory or Approved holdover.\n${unmapped
-              .map((a) => `${a.name} — ${a.territory || "no territory"} / ${a.territoryStatus || "no status"}`)
-              .join("\n")}`}
-          >
-            ⚑ {unmapped.length} unmapped
+      {data.storeMode === "memory" && (
+        <footer className="footer">
+          <span className="qflag" title="No Redis env vars found, so tier/outreach/revisit edits live in this dev server's memory and are lost on restart.">
+            ⚑ dev store (not saved)
           </span>
-        )}
-      </footer>
+        </footer>
+      )}
 
       {tip && (
         <div className="tip" style={{ left: tip.x, top: tip.y }} role="tooltip">

@@ -18,12 +18,18 @@ import SortTh from "./SortTh";
 
 const valuesOf = (a: Account): TerritoryValues => ({ territory: a.territory, territory_status: a.territoryStatus });
 
+const COLS = 6;
+
+/** A block of rows. With a label it renders under a collapsible section row (Data Hygiene V2). */
+export type HygieneGroup = { key: string; label?: string; def?: string; rows: Account[] };
+
 /**
- * Data Hygiene tab: accounts with a blank Territory or Territory Status. Pick values in the
+ * Data Hygiene tabs: accounts whose Territory / Territory Status need fixing. Pick values in the
  * row, then "Save…" opens ConfirmWriteModal; only its confirm button writes to HubSpot.
  */
 export default function HygieneTable({
-  rows,
+  groups,
+  emptyText,
   options,
   sort,
   onSort,
@@ -31,7 +37,8 @@ export default function HygieneTable({
   onNotes,
   onToast,
 }: {
-  rows: Account[];
+  groups: HygieneGroup[];
+  emptyText: string;
   options: TerritoryOptions;
   sort: Sort;
   onSort: (k: SortKey) => void;
@@ -43,6 +50,7 @@ export default function HygieneTable({
   const [confirmFor, setConfirmFor] = useState<Account | null>(null);
   const [writing, setWriting] = useState(false);
   const [writeError, setWriteError] = useState("");
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const optionsMissing = TERRITORY_PROPERTIES.some((p) => options[p].length === 0);
 
   const changesFor = (a: Account): TerritoryChanges => {
@@ -105,8 +113,69 @@ export default function HygieneTable({
     }
   };
 
+  const renderRow = (a: Account) => {
+    const cur = valuesOf(a);
+    const d = drafts[a.id] ?? {};
+    const dirty = Object.keys(changesFor(a)).length > 0;
+    const preview = a.notes.trim();
+    return (
+      <tr key={a.id} className="acct">
+        <td>
+          <div className="co-name">
+            <a className="rl" href={a.url} target="_blank" rel="noreferrer">
+              {a.name}
+            </a>
+          </div>
+        </td>
+        <td>{a.ownerName}</td>
+        {TERRITORY_PROPERTIES.map((p) => {
+          const v = d[p] ?? cur[p];
+          return (
+            <td key={p}>
+              <EnumSelect
+                value={v}
+                options={options[p]}
+                changed={d[p] !== undefined && d[p] !== cur[p]}
+                disabled={optionsMissing}
+                onChange={(nv) => setDraft(a.id, p, nv)}
+                label={`${PROPERTY_LABEL[p]} for ${a.name}`}
+              />
+            </td>
+          );
+        })}
+        <td>
+          <div className="hyg-actions">
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={!dirty}
+              onClick={() => {
+                setWriteError("");
+                setConfirmFor(a);
+              }}
+            >
+              Save…
+            </button>
+            {dirty && (
+              <button className="x-btn" title="Discard changes" onClick={() => clearDraft(a.id)}>
+                ×
+              </button>
+            )}
+          </div>
+        </td>
+        <td>
+          <button className="notes-btn" onClick={() => onNotes(a.id)} title={preview ? "Open notes" : "Add a note"}>
+            {preview ? <span className="np">{preview}</span> : <span className="notes-add">+ Add note</span>}
+          </button>
+        </td>
+      </tr>
+    );
+  };
+
+  const total = groups.reduce((n, g) => n + g.rows.length, 0);
   const pending = confirmFor ? changesFor(confirmFor) : {};
   const pendingProps = TERRITORY_PROPERTIES.filter((p) => pending[p] !== undefined);
+  /** Pending properties that already hold a value in HubSpot: this write replaces it, not fills a gap. */
+  const overwrites = confirmFor ? pendingProps.filter((p) => valuesOf(confirmFor)[p] !== "") : [];
 
   return (
     <>
@@ -135,72 +204,48 @@ export default function HygieneTable({
               <SortTh k="notes" label="Notes" sort={sort} onSort={onSort} />
             </tr>
           </thead>
-          <tbody>
-            {rows.length === 0 && (
+          {total === 0 && (
+            <tbody>
               <tr>
-                <td colSpan={6} className="muted hyg-empty">
-                  Every account in view has a Territory and a Territory Status.
+                <td colSpan={COLS} className="muted hyg-empty">
+                  {emptyText}
                 </td>
               </tr>
-            )}
-            {rows.map((a) => {
-              const cur = valuesOf(a);
-              const d = drafts[a.id] ?? {};
-              const dirty = Object.keys(changesFor(a)).length > 0;
-              const preview = a.notes.trim();
-              return (
-                <tr key={a.id} className="acct">
-                  <td>
-                    <div className="co-name">
-                      <a className="rl" href={a.url} target="_blank" rel="noreferrer">
-                        {a.name}
-                      </a>
-                    </div>
-                  </td>
-                  <td>{a.ownerName}</td>
-                  {TERRITORY_PROPERTIES.map((p) => {
-                    const v = d[p] ?? cur[p];
-                    return (
-                      <td key={p}>
-                        <EnumSelect
-                          value={v}
-                          options={options[p]}
-                          changed={d[p] !== undefined && d[p] !== cur[p]}
-                          disabled={optionsMissing}
-                          onChange={(nv) => setDraft(a.id, p, nv)}
-                          label={`${PROPERTY_LABEL[p]} for ${a.name}`}
-                        />
-                      </td>
-                    );
-                  })}
-                  <td>
-                    <div className="hyg-actions">
-                      <button
-                        className="btn btn-primary btn-sm"
-                        disabled={!dirty}
-                        onClick={() => {
-                          setWriteError("");
-                          setConfirmFor(a);
-                        }}
-                      >
-                        Save…
-                      </button>
-                      {dirty && (
-                        <button className="x-btn" title="Discard changes" onClick={() => clearDraft(a.id)}>
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <button className="notes-btn" onClick={() => onNotes(a.id)} title={preview ? "Open notes" : "Add a note"}>
-                      {preview ? <span className="np">{preview}</span> : <span className="notes-add">+ Add note</span>}
-                    </button>
+            </tbody>
+          )}
+          {groups.map((g) => {
+            if (!g.label) {
+              return <tbody key={g.key}>{g.rows.map(renderRow)}</tbody>;
+            }
+            const open = !collapsed[g.key];
+            const toggle = () => setCollapsed((prev) => ({ ...prev, [g.key]: !prev[g.key] }));
+            return (
+              <tbody key={g.key}>
+                <tr
+                  className={`sec-row sec-${g.key}`}
+                  aria-expanded={open}
+                  onClick={toggle}
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggle();
+                    }
+                  }}
+                >
+                  <td colSpan={COLS}>
+                    <span className="sec-label">
+                      <span className="sec-chev">▾</span>
+                      <span className="sec-dot" />
+                      {g.label} <span className="cz">· {g.rows.length}</span>
+                    </span>
+                    {g.def && <span className="sec-def">{g.def}</span>}
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
+                {open && g.rows.map(renderRow)}
+              </tbody>
+            );
+          })}
         </table>
       </div>
 
@@ -216,6 +261,20 @@ export default function HygieneTable({
           onCancel={() => setConfirmFor(null)}
           onConfirm={write}
         >
+          {overwrites.length > 0 && (
+            <div>
+              <div className="block-label">
+                Replaces <span className="def">these values are set in HubSpot today</span>
+              </div>
+              <div className="preview">
+                {overwrites.map((p) => (
+                  <div key={p}>
+                    {p} = <mark className="old">{valuesOf(confirmFor!)[p]}</mark>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div>
             <div className="block-label">New values</div>
             <div className="preview">

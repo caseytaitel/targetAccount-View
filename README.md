@@ -6,7 +6,9 @@ ownership, outreach status and a revisit date, and has a notes drawer that syncs
 HubSpot company `notes` property. Every column except Tier sorts from its header.
 
 A **Data Hygiene** tab lists accounts with a blank `territory` or `territory_status` and lets you
-set them in HubSpot, one confirmed write per company.
+set them in HubSpot, one confirmed write per company. A **Data Hygiene V2** tab sits beside it for
+comparison: the same rows split into "Missing values" and "Status conflict" (status In territory
+for a territory with no tab). Keep one once compared.
 
 UI conventions are copied from the CRO dash (`caseytaitel/CRO-weeklyReport`) so the two apps
 read as one system. See `DESIGN.md`. Data lineage is in `DATA.md`.
@@ -17,7 +19,7 @@ read as one system. See `DESIGN.md`. Data lineage is in `DATA.md`.
 |---|---|---|
 | Companies, owners, industry labels, territory options | HubSpot (read) | Live, cached 5 min per server instance; **Refresh** bypasses the cache |
 | Company `notes` | HubSpot (write) | Appends a dated entry; only after the confirm pop-up |
-| Company `territory`, `territory_status` | HubSpot (write) | Data Hygiene tab only; values must be live HubSpot options; only after the confirm pop-up |
+| Company `territory`, `territory_status` | HubSpot (write) | Data Hygiene tabs only; values must be live HubSpot options; only after the confirm pop-up |
 | Tier, Outreach Owner, Outreach Status, Revisit date | Upstash Redis | App-only; never written to HubSpot |
 
 > ### ⚑ Flagged next step: move app-side fields into HubSpot
@@ -74,7 +76,7 @@ lib/config.ts        scope rules, enums, property list (the one place to change 
 lib/accounts.ts      raw HubSpot -> Account, tab bucketing, Company Tags (pure, tested)
 lib/hubspot.ts       HubSpot client: retry/backoff, search, owners, and the ONLY two writes (notes, territory)
 lib/notes.ts         note entry format + request validation (shared by client preview and server)
-lib/territory.ts     Data Hygiene rule, territory request validation + PATCH-body allowlist
+lib/territory.ts     Data Hygiene rules (needsHygiene, hygieneIssue), territory request validation + PATCH-body allowlist
 lib/sort.ts          column sort rules (pure, tested)
 lib/state.ts         Redis app state + validation
 lib/load.ts          board payload (HubSpot cache + Redis state)

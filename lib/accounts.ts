@@ -154,8 +154,8 @@ export function toAccount(
 }
 
 /**
- * Which top-level tab an account belongs to, or null if it fits none
- * (shown as the quiet "unmapped" flag so nothing silently disappears).
+ * Which top-level tab an account belongs to, or null if it fits none ("unmapped": not shown on
+ * any tab; blank-territory ones still appear on Data Hygiene).
  *
  * - Out of Territory: territory_status is Out of territory or Approved holdover,
  *   whatever the territory says.

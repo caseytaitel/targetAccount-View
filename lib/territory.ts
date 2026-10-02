@@ -4,7 +4,7 @@
  */
 
 import { TERRITORY_PROPERTIES, type TerritoryProperty } from "./config";
-import type { Account } from "./accounts";
+import { type Account, bucket } from "./accounts";
 
 export type TerritoryValues = Record<TerritoryProperty, string>;
 export type TerritoryChanges = Partial<TerritoryValues>;
@@ -20,6 +20,21 @@ export const PROPERTY_LABEL: Record<TerritoryProperty, string> = {
 /** An account belongs on the Data Hygiene tab when either territory property is blank. */
 export function needsHygiene(a: Pick<Account, "territory" | "territoryStatus">): boolean {
   return a.territory === "" || a.territoryStatus === "";
+}
+
+/**
+ * Data Hygiene V2 categories:
+ * - missing: Territory or Territory Status is blank (same rule as needsHygiene).
+ * - conflict: both are set but the account fits no tab, i.e. status is In territory for a
+ *   territory that has no tab (e.g. North Central / In territory).
+ * Missing wins when both apply, so each account sits in one section.
+ */
+export type HygieneIssue = "missing" | "conflict";
+export function hygieneIssue(a: Pick<Account, "territory" | "territoryStatus">): HygieneIssue | null {
+  if (needsHygiene(a)) {
+    return "missing";
+  }
+  return bucket(a) === null ? "conflict" : null;
 }
 
 export type TerritoryRequest = { changes: TerritoryChanges; expected: TerritoryValues };

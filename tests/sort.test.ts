@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Account } from "@/lib/accounts";
 import { DEFAULT_SORT, comparator, isSort, latestNoteDate, nextSort } from "@/lib/sort";
 import type { AccountState } from "@/lib/state";
-import { needsHygiene } from "@/lib/territory";
+import { hygieneIssue, needsHygiene } from "@/lib/territory";
 
 function acct(id: string, over: Partial<Account> = {}): Account {
   return {
@@ -84,5 +84,25 @@ describe("needsHygiene", () => {
     expect(needsHygiene({ territory: "Northeast", territoryStatus: "" })).toBe(true);
     expect(needsHygiene({ territory: "", territoryStatus: "Out of territory" })).toBe(true);
     expect(needsHygiene({ territory: "Northeast", territoryStatus: "In territory" })).toBe(false);
+  });
+});
+
+describe("hygieneIssue", () => {
+  it("calls any blank value missing, even when the account also fits no tab", () => {
+    expect(hygieneIssue({ territory: "", territoryStatus: "" })).toBe("missing");
+    expect(hygieneIssue({ territory: "Northeast", territoryStatus: "" })).toBe("missing");
+    expect(hygieneIssue({ territory: "North Central", territoryStatus: "" })).toBe("missing");
+  });
+
+  it("flags In territory for a territory with no tab as a conflict", () => {
+    expect(hygieneIssue({ territory: "North Central", territoryStatus: "In territory" })).toBe("conflict");
+    expect(hygieneIssue({ territory: "Southwest", territoryStatus: "In territory" })).toBe("conflict");
+  });
+
+  it("leaves accounts that land on a tab alone", () => {
+    expect(hygieneIssue({ territory: "Northeast", territoryStatus: "In territory" })).toBeNull();
+    expect(hygieneIssue({ territory: "Northwest", territoryStatus: "In territory" })).toBeNull();
+    expect(hygieneIssue({ territory: "Southwest", territoryStatus: "Out of territory" })).toBeNull();
+    expect(hygieneIssue({ territory: "Southeast", territoryStatus: "Approved holdover" })).toBeNull();
   });
 });
