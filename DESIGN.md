@@ -33,18 +33,18 @@ dark mode are ported from `cro_kpi/render/assets.py` into `app/globals.css`.
    - Data gaps show as ⚑ with the reason on hover: blank territory status and the in-memory dev store.
    - Removed as clutter (Casey, 2026-10-02): the footer's read-only disclaimer and the "⚑ n unmapped"
      flag. The footer now renders only when the dev store flag is on.
-11. **Header subtext:** each owner's account count, then the total (e.g. "Jeff Pala 150 · John Greene 158 ·
-   308 target accounts").
-9. **Data Hygiene tab:** sits after Out of Territory. A flat list (no tier sections) of accounts with
-   a blank Territory or Territory Status, with the two properties as dropdowns of HubSpot's options.
+9. **Data Hygiene tab:** sits after Out of Territory. Accounts whose Territory / Territory Status need
+   fixing, with the two properties as dropdowns of HubSpot's options.
    A picked value turns the select blue until saved; × discards it. One confirmed write per company
    rather than a bulk write, so each change is reviewed. A saved row leaves the tab once both values
-   are set. The same Owner / Outreach filters apply. Columns are kept to what the task needs
+   are set and it fits a tab. The same Owner / Outreach filters apply. Columns are kept to what the task needs
    (Casey, 2026-10-01): Company Name, Company Owner, Territory, Territory Status, Save, Notes.
-   - **Data Hygiene V2** (Casey, 2026-10-02, to compare side by side with the tab above): same table, split
-     into collapsible section rows like the tier sections. "Missing values" (amber dot) and "Status conflict"
+   - Two sections (Casey picked this over the flat list after comparing them side by side, 2026-10-02),
+     as collapsible section rows like the tier sections. "Missing values" (amber dot) and "Status conflict"
      (red dot), each with a one-line definition that says what to fix. Sorting applies within each section.
      Section collapse is not saved. When a write replaces a value already set, the confirm modal adds a
      "Replaces" block with the old value struck through in red.
 10. **Per-viewer conveniences:** the selected tab, the column sort and collapsed sections are kept in `localStorage`.
    Everything shared (tier, outreach, revisit) is in Redis.
+11. **Header subtext:** each owner's account count, then the total (e.g. "Jeff Pala 150 · John Greene 158 ·
+   308 target accounts").

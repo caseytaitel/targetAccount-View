@@ -20,16 +20,15 @@ const valuesOf = (a: Account): TerritoryValues => ({ territory: a.territory, ter
 
 const COLS = 6;
 
-/** A block of rows. With a label it renders under a collapsible section row (Data Hygiene V2). */
-export type HygieneGroup = { key: string; label?: string; def?: string; rows: Account[] };
+/** One section of the tab, rendered under a collapsible section row like the tier sections. */
+export type HygieneGroup = { key: string; label: string; def: string; rows: Account[] };
 
 /**
- * Data Hygiene tabs: accounts whose Territory / Territory Status need fixing. Pick values in the
+ * Data Hygiene tab: accounts whose Territory / Territory Status need fixing. Pick values in the
  * row, then "Save…" opens ConfirmWriteModal; only its confirm button writes to HubSpot.
  */
 export default function HygieneTable({
   groups,
-  emptyText,
   options,
   sort,
   onSort,
@@ -38,7 +37,6 @@ export default function HygieneTable({
   onToast,
 }: {
   groups: HygieneGroup[];
-  emptyText: string;
   options: TerritoryOptions;
   sort: Sort;
   onSort: (k: SortKey) => void;
@@ -208,15 +206,12 @@ export default function HygieneTable({
             <tbody>
               <tr>
                 <td colSpan={COLS} className="muted hyg-empty">
-                  {emptyText}
+                  Every account in view has both values set and fits a tab.
                 </td>
               </tr>
             </tbody>
           )}
           {groups.map((g) => {
-            if (!g.label) {
-              return <tbody key={g.key}>{g.rows.map(renderRow)}</tbody>;
-            }
             const open = !collapsed[g.key];
             const toggle = () => setCollapsed((prev) => ({ ...prev, [g.key]: !prev[g.key] }));
             return (
@@ -239,7 +234,7 @@ export default function HygieneTable({
                       <span className="sec-dot" />
                       {g.label} <span className="cz">· {g.rows.length}</span>
                     </span>
-                    {g.def && <span className="sec-def">{g.def}</span>}
+                    <span className="sec-def">{g.def}</span>
                   </td>
                 </tr>
                 {open && g.rows.map(renderRow)}

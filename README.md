@@ -5,10 +5,9 @@ Accounts are split by territory (Northeast, NY / NJ, Mid-Atlantic, Northwest, Ou
 ownership, outreach status and a revisit date, and has a notes drawer that syncs with the
 HubSpot company `notes` property. Every column except Tier sorts from its header.
 
-A **Data Hygiene** tab lists accounts with a blank `territory` or `territory_status` and lets you
-set them in HubSpot, one confirmed write per company. A **Data Hygiene V2** tab sits beside it for
-comparison: the same rows split into "Missing values" and "Status conflict" (status In territory
-for a territory with no tab). Keep one once compared.
+A **Data Hygiene** tab lists accounts whose `territory` / `territory_status` need fixing, in two
+sections: "Missing values" (either is blank) and "Status conflict" (status In territory for a
+territory with no tab). You set them in HubSpot, one confirmed write per company.
 
 UI conventions are copied from the CRO dash (`caseytaitel/CRO-weeklyReport`) so the two apps
 read as one system. See `DESIGN.md`. Data lineage is in `DATA.md`.

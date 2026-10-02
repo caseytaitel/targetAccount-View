@@ -8,17 +8,15 @@ import type { BoardData } from "@/lib/load";
 import { today } from "@/lib/notes";
 import { DEFAULT_SORT, type Sort, type SortKey, comparator, isSort, nextSort } from "@/lib/sort";
 import type { AccountState, StateField } from "@/lib/state";
-import { type TerritoryValues, hygieneIssue, needsHygiene } from "@/lib/territory";
+import { type TerritoryValues, hygieneIssue } from "@/lib/territory";
 
 import HygieneTable, { type HygieneGroup } from "./HygieneTable";
 import NotesDrawer from "./NotesDrawer";
 import SortTh from "./SortTh";
 
-/** The territory tabs plus the Data Hygiene views, which are cross-cuts, not buckets. */
+/** The territory tabs plus the Data Hygiene view, which is a cross-cut, not a bucket. */
 const HYGIENE = "hygiene" as const;
-/** V2 runs beside V1 so the two can be compared; keep one once Casey picks. */
-const HYGIENE_V2 = "hygiene-v2" as const;
-type View = TabKey | typeof HYGIENE | typeof HYGIENE_V2;
+type View = TabKey | typeof HYGIENE;
 type Tip = { lines: string[]; x: number; y: number };
 type SectionKey = (typeof TIERS)[number] | "untiered" | "revisit";
 
@@ -29,12 +27,10 @@ const TAB_LABEL: Record<View, string> = {
   Northwest: "Northwest",
   [OUT_TAB]: "Out of Territory",
   [HYGIENE]: "Data Hygiene",
-  [HYGIENE_V2]: "Data Hygiene V2",
 };
-const TAB_ORDER: View[] = [...TERRITORIES, OUT_TAB, HYGIENE, HYGIENE_V2];
+const TAB_ORDER: View[] = [...TERRITORIES, OUT_TAB, HYGIENE];
 const TAB_TITLE: Partial<Record<View, string>> = {
-  [HYGIENE]: "Accounts with a blank Territory or Territory Status in HubSpot",
-  [HYGIENE_V2]: "Blank Territory / Territory Status, plus In territory accounts whose territory has no tab",
+  [HYGIENE]: "Blank Territory / Territory Status, plus In territory accounts whose territory has no tab",
 };
 
 const SECTIONS: { key: SectionKey; label: string; def?: string }[] = [
@@ -119,8 +115,7 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
       .sort((x, y) => x[1].localeCompare(y[1]));
   }, [data.accounts]);
 
-  const hygiene = useMemo(() => data.accounts.filter(needsHygiene), [data.accounts]);
-  const hygieneV2 = useMemo(() => data.accounts.filter((a) => hygieneIssue(a) !== null), [data.accounts]);
+  const hygiene = useMemo(() => data.accounts.filter((a) => hygieneIssue(a) !== null), [data.accounts]);
 
   const passesFilters = useCallback(
     (a: Account) => {
@@ -138,13 +133,8 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
     [ownerFilter, outreachFilter, stateMap],
   );
 
-  const hygieneRows = useMemo(
-    () => hygiene.filter(passesFilters).sort(comparator(sort, stateMap)),
-    [hygiene, passesFilters, sort, stateMap],
-  );
-
-  const hygieneV2Groups = useMemo((): HygieneGroup[] => {
-    const rows = hygieneV2.filter(passesFilters).sort(comparator(sort, stateMap));
+  const hygieneGroups = useMemo((): HygieneGroup[] => {
+    const rows = hygiene.filter(passesFilters).sort(comparator(sort, stateMap));
     return [
       {
         key: "missing",
@@ -159,10 +149,10 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
         rows: rows.filter((a) => hygieneIssue(a) === "conflict"),
       },
     ];
-  }, [hygieneV2, passesFilters, sort, stateMap]);
+  }, [hygiene, passesFilters, sort, stateMap]);
 
   const sections = useMemo(() => {
-    const rows = tab === HYGIENE || tab === HYGIENE_V2 ? [] : (byTab.get(tab) ?? []).filter(passesFilters);
+    const rows = tab === HYGIENE ? [] : (byTab.get(tab) ?? []).filter(passesFilters);
     const out: Record<SectionKey, Account[]> = { A: [], B: [], C: [], untiered: [], revisit: [] };
     for (const a of rows) {
       const st = stateMap[a.id] ?? {};
@@ -289,12 +279,10 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
 
   const isOut = tab === OUT_TAB;
   const isHygiene = tab === HYGIENE;
-  const isHygieneV2 = tab === HYGIENE_V2;
   const colCount = isOut ? 11 : 10;
   const notesAccount = notesFor ? data.accounts.find((a) => a.id === notesFor) : undefined;
   const refreshedAt = new Date(data.fetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  const tabCount = (t: View) =>
-    t === HYGIENE ? hygiene.length : t === HYGIENE_V2 ? hygieneV2.length : (byTab.get(t) ?? []).length;
+  const tabCount = (t: View) => (t === HYGIENE ? hygiene.length : (byTab.get(t) ?? []).length);
 
   return (
     <div className="container">
@@ -365,15 +353,9 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
           </div>
         </div>
 
-        {isHygiene || isHygieneV2 ? (
+        {isHygiene ? (
           <HygieneTable
-            key={tab}
-            groups={isHygiene ? [{ key: "all", rows: hygieneRows }] : hygieneV2Groups}
-            emptyText={
-              isHygiene
-                ? "Every account in view has a Territory and a Territory Status."
-                : "Every account in view has both values set and fits a tab."
-            }
+            groups={hygieneGroups}
             options={data.territoryOptions}
             sort={sort}
             onSort={chooseSort}

@@ -17,14 +17,14 @@ export const PROPERTY_LABEL: Record<TerritoryProperty, string> = {
   territory_status: "Territory Status",
 };
 
-/** An account belongs on the Data Hygiene tab when either territory property is blank. */
+/** Either territory property is blank (the Data Hygiene tab's "Missing values" section). */
 export function needsHygiene(a: Pick<Account, "territory" | "territoryStatus">): boolean {
   return a.territory === "" || a.territoryStatus === "";
 }
 
 /**
- * Data Hygiene V2 categories:
- * - missing: Territory or Territory Status is blank (same rule as needsHygiene).
+ * Data Hygiene tab sections (null = not on the tab):
+ * - missing: Territory or Territory Status is blank (needsHygiene).
  * - conflict: both are set but the account fits no tab, i.e. status is In territory for a
  *   territory that has no tab (e.g. North Central / In territory).
  * Missing wins when both apply, so each account sits in one section.
