@@ -161,7 +161,7 @@ th .sort-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;bo
 @media(prefers-color-scheme:dark){.caret{color:var(--text-primary);}}
 
 /* Data Hygiene tab */
-table.hyg{min-width:1100px;}
+table.hyg{min-width:880px;}
 .hyg-banner{margin:10px 12px;}
 .hyg-empty{padding:18px 10px;text-align:center;}
 .hyg-actions{display:flex;align-items:center;gap:4px;}

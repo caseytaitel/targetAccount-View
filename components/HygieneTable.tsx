@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { type Account, compactCount } from "@/lib/accounts";
+import type { Account } from "@/lib/accounts";
 import { TERRITORY_PROPERTIES, type TerritoryProperty } from "@/lib/config";
 import type { Sort, SortKey } from "@/lib/sort";
 import {
@@ -120,8 +120,6 @@ export default function HygieneTable({
           <colgroup>
             <col style={{ width: 220 }} />
             <col style={{ width: 110 }} />
-            <col style={{ width: 140 }} />
-            <col style={{ width: 58 }} />
             <col style={{ width: 160 }} />
             <col style={{ width: 160 }} />
             <col style={{ width: 90 }} />
@@ -131,8 +129,6 @@ export default function HygieneTable({
             <tr>
               <SortTh k="name" label="Company Name" sort={sort} onSort={onSort} />
               <SortTh k="owner" label="Company Owner" sort={sort} onSort={onSort} />
-              <SortTh k="industry" label="Industry" sort={sort} onSort={onSort} />
-              <SortTh k="size" label="Size" sort={sort} onSort={onSort} right />
               <SortTh k="territory" label="Territory" sort={sort} onSort={onSort} />
               <SortTh k="territory_status" label="Territory Status" sort={sort} onSort={onSort} />
               <th />
@@ -142,7 +138,7 @@ export default function HygieneTable({
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="muted hyg-empty">
+                <td colSpan={6} className="muted hyg-empty">
                   Every account in view has a Territory and a Territory Status.
                 </td>
               </tr>
@@ -162,10 +158,6 @@ export default function HygieneTable({
                     </div>
                   </td>
                   <td>{a.ownerName}</td>
-                  <td>{a.industry || <span className="muted">—</span>}</td>
-                  <td className="r" title={a.employees === null ? "" : `${a.employees.toLocaleString("en-US")} employees`}>
-                    {a.employees === null ? <span className="muted">—</span> : compactCount(a.employees)}
-                  </td>
                   {TERRITORY_PROPERTIES.map((p) => {
                     const v = d[p] ?? cur[p];
                     return (

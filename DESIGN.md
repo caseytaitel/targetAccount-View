@@ -35,6 +35,7 @@ dark mode are ported from `cro_kpi/render/assets.py` into `app/globals.css`.
    a blank Territory or Territory Status, with the two properties as dropdowns of HubSpot's options.
    A picked value turns the select blue until saved; × discards it. One confirmed write per company
    rather than a bulk write, so each change is reviewed. A saved row leaves the tab once both values
-   are set. The same Owner / Outreach filters apply.
+   are set. The same Owner / Outreach filters apply. Columns are kept to what the task needs
+   (Casey, 2026-10-01): Company Name, Company Owner, Territory, Territory Status, Save, Notes.
 10. **Per-viewer conveniences:** the selected tab, the column sort and collapsed sections are kept in `localStorage`.
    Everything shared (tier, outreach, revisit) is in Redis.
