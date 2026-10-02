@@ -22,6 +22,22 @@ On 2026-10-01 this returned **309** companies.
 
 Blank-status accounts carry a ⚑ next to the name ("Territory Status is not set").
 
+## Data Hygiene tab (`needsHygiene()` in `lib/territory.ts`)
+
+Not a bucket: a cross-cut of the whole population. An account is listed when `territory` is blank
+**or** `territory_status` is blank, so it can also appear on a territory tab (blank status) or in
+the unmapped count (blank territory).
+
+Checked live in HubSpot on 2026-10-01: **58** blank `territory_status`, **1** blank `territory`
+(Hawaiian Airlines, which also has a blank status), so the tab held 58 accounts. Blank territory is
+rare but does happen, so both columns are editable.
+
+Dropdown values are the properties' live HubSpot options (`/crm/v3/properties/companies/{name}`,
+hidden options dropped, cached 5 min):
+
+- `territory`: Northeast, NY / NJ, Mid-Atlantic, Southeast, North Central, TOLA, Northwest, Southwest, Ohio Valley, Outside of US
+- `territory_status`: In territory, Out of territory, Approved holdover
+
 Snapshot on 2026-10-01 (309 total): Northeast 63, NY / NJ 83, Mid-Atlantic 90, Northwest 27 (John's former territory; 22 In territory + 5 blank status), Out of Territory 43, unmapped 3.
 - 57 of the territory-tab accounts have a blank `territory_status` (43 John's, 14 Jeff's).
 - The 3 unmapped accounts break down as:
@@ -64,14 +80,39 @@ The tooltip lists values only, with no property-name lead-in.
 
 "Target" is not a tag here because every account in scope is a target account.
 
+## Sorting (`lib/sort.ts`)
+
+Every column header except Tier sorts (rows are already grouped by tier). Sorting is within each
+tier section. Blanks sort last in both directions; ties fall back to name A→Z.
+
+| Column | Sorts by | First click |
+|---|---|---|
+| Company Name, Company Owner, Industry, Outreach Owner | text | A→Z |
+| Size | `numberofemployees` | largest first |
+| Company Tags | number of tags | most first |
+| Territory / Status (Out tab), Territory, Territory Status (Hygiene) | `territory`, `territory_status` | A→Z |
+| Outreach Status | pipeline order (Reached out → Meeting completed) | earliest stage first |
+| Revisit | `revisit_on` | soonest first |
+| Notes | date of the newest entry (the leading `YYYY-MM-DD`); undated text after dated; empty last | newest first |
+
+The Revisit later section always sorts soonest first.
+
 ## Notes write (`lib/hubspot.ts` `appendCompanyNote`)
 
 1. Re-read `notes`. If it differs from what the drawer showed (ignoring trailing whitespace), return 409 and write nothing.
 2. New value = `YYYY-MM-DD · {User}: {text}` + blank line + existing value (verbatim).
 3. `PATCH /crm/v3/objects/companies/{id}` with body `{ "properties": { "notes": … } }` and nothing else.
 
+## Territory write (`lib/hubspot.ts` `setCompanyTerritory`)
+
+1. The request may carry only `territory` and/or `territory_status`, each non-empty (this fills gaps; it never clears).
+2. Each value must be a live option of its HubSpot property, or 400 and nothing is written.
+3. Re-read both properties. If either differs from what the row showed, return 409, write nothing, and the row updates to the latest values.
+4. `PATCH /crm/v3/objects/companies/{id}` with body `{ "properties": { … } }` holding only the changed territory keys.
+
 ## Verification
 
 - `npm test`
 - The tab counts plus the unmapped count equal the HubSpot total for the Population filter above.
 - Spot-check: Washington Metropolitan Area Transit Authority shows Event attendee with two events.
+- Data Hygiene count equals a HubSpot search of the Population filter with `territory` or `territory_status` unknown.

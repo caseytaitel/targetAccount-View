@@ -5,14 +5,17 @@
 
 import { type Account, toAccount } from "./accounts";
 import { CACHE_TTL_MS } from "./config";
-import { getIndustryLabels, getOwnerNames, searchTargetAccounts } from "./hubspot";
+import { getIndustryLabels, getOwnerNames, getTerritoryOptions, searchTargetAccounts } from "./hubspot";
 import { type AccountState, getStore } from "./state";
+import type { TerritoryOptions, TerritoryValues } from "./territory";
 
 export type BoardData = {
   accounts: Account[];
   state: Record<string, AccountState>;
   fetchedAt: string;
   storeMode: "redis" | "memory";
+  /** Data Hygiene dropdown options. Empty arrays (editing disabled) if HubSpot couldn't be read. */
+  territoryOptions: TerritoryOptions;
 };
 
 let cache: { at: number; accounts: Account[]; fetchedAt: string } | null = null;
@@ -34,8 +37,11 @@ async function pullAccounts(force: boolean): Promise<{ accounts: Account[]; fetc
 export async function loadBoard(force = false): Promise<BoardData> {
   const { accounts, fetchedAt } = await pullAccounts(force);
   const store = getStore();
-  const state = await store.getAll(accounts.map((a) => a.id));
-  return { accounts, state, fetchedAt, storeMode: store.mode };
+  const [state, territoryOptions] = await Promise.all([
+    store.getAll(accounts.map((a) => a.id)),
+    getTerritoryOptions(force).catch(() => ({ territory: [], territory_status: [] })),
+  ]);
+  return { accounts, state, fetchedAt, storeMode: store.mode, territoryOptions };
 }
 
 /** Keep the cached copy in step after a notes write, so a reload within the TTL shows it. */
@@ -43,5 +49,14 @@ export function updateCachedNotes(companyId: string, notes: string): void {
   const a = cache?.accounts.find((x) => x.id === companyId);
   if (a) {
     a.notes = notes;
+  }
+}
+
+/** Same, after a territory write. */
+export function updateCachedTerritory(companyId: string, values: TerritoryValues): void {
+  const a = cache?.accounts.find((x) => x.id === companyId);
+  if (a) {
+    a.territory = values.territory;
+    a.territoryStatus = values.territory_status;
   }
 }

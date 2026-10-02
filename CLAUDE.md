@@ -3,11 +3,15 @@
   Write it with error handling, tests, and clear structure.
 
 # HubSpot write rules (non-negotiable)
-- The ONLY HubSpot property this app may write is company `notes`.
-  `lib/hubspot.ts` exposes one mutating function, `appendCompanyNote`, whose PATCH body is
-  built by `notesPatchBody` with `notes` as the only key. Do not add a generic update helper.
-- Never write without explicit user confirmation in the UI: the only client caller is the
-  confirm button in `components/ConfirmWriteModal.tsx`.
+- The ONLY HubSpot company properties this app may write are `notes`, `territory` and
+  `territory_status` (territory pair approved by Casey on 2026-10-01 for the Data Hygiene tab).
+  `lib/hubspot.ts` exposes exactly two mutating functions:
+  - `appendCompanyNote`: PATCH body from `notesPatchBody`, `notes` as the only key.
+  - `setCompanyTerritory`: PATCH body from `territoryPatchBody` (`lib/territory.ts`), built key by
+    key from `TERRITORY_PROPERTIES`; every value must be a live HubSpot option.
+  Do not add a generic update helper or widen either allowlist without Casey's approval.
+- Never write without explicit user confirmation in the UI: the only client callers are the
+  confirm button in `components/ConfirmWriteModal.tsx` (used by NotesDrawer and HygieneTable).
 - Tier, Outreach Owner/Status and Revisit live in Redis (`lib/state.ts`), never HubSpot.
   Moving them is the flagged next step in README.md and needs Casey's approval first.
 - The token's write scope covers every company property, so the code is the guard. Tests in

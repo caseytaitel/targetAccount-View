@@ -34,8 +34,14 @@ export const OUTREACH_STATUSES = [
   "Meeting completed",
 ] as const;
 
-/** The one HubSpot property this app may write. Enforced in lib/hubspot.ts. */
+/**
+ * HubSpot write allowlist. Enforced in lib/hubspot.ts: `notes` via appendCompanyNote, and the
+ * two territory properties via setCompanyTerritory (Data Hygiene tab, Casey, 2026-10-01).
+ * Nothing else is ever written.
+ */
 export const WRITABLE_PROPERTY = "notes" as const;
+export const TERRITORY_PROPERTIES = ["territory", "territory_status"] as const;
+export type TerritoryProperty = (typeof TERRITORY_PROPERTIES)[number];
 /** HubSpot's limit for a single-line/multi-line text property. */
 export const NOTES_MAX_LENGTH = 65536;
 

@@ -1,26 +1,27 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 /**
- * The explicit-permission gate for the app's only HubSpot write. Shows exactly what will be
- * written: the company, the property, and the full new value with the added entry highlighted.
- * Focus starts on Cancel so a stray Enter never writes.
+ * The explicit-permission gate for every HubSpot write (notes, and territory on the Data
+ * Hygiene tab). Its confirm button is the only client-side caller of a write route. The caller
+ * passes exactly what will be written: the company, the properties, a one-line summary of the
+ * change, and the new value(s) as `children`. Focus starts on Cancel so a stray Enter never writes.
  */
 export default function ConfirmWriteModal({
   companyName,
-  current,
-  entryLine,
-  proposed,
+  properties,
+  change,
+  children,
   writing,
   error,
   onCancel,
   onConfirm,
 }: {
   companyName: string;
-  current: string;
-  entryLine: string;
-  proposed: string;
+  properties: readonly string[];
+  change: string;
+  children: ReactNode;
   writing: boolean;
   error: string;
   onCancel: () => void;
@@ -40,8 +41,6 @@ export default function ConfirmWriteModal({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onCancel, writing]);
 
-  const rest = proposed.slice(entryLine.length);
-
   return (
     <div className="modal-scrim" onClick={() => !writing && onCancel()}>
       <div
@@ -59,20 +58,20 @@ export default function ConfirmWriteModal({
           <dl className="kv">
             <dt>Company</dt>
             <dd>{companyName}</dd>
-            <dt>Property</dt>
+            <dt>{properties.length === 1 ? "Property" : "Properties"}</dt>
             <dd>
-              <code>notes</code> (only this property changes)
+              {properties.map((p, i) => (
+                <span key={p}>
+                  {i > 0 && ", "}
+                  <code>{p}</code>
+                </span>
+              ))}{" "}
+              (only {properties.length === 1 ? "this property changes" : "these properties change"})
             </dd>
             <dt>Change</dt>
-            <dd>{current.trim() ? "Adds one entry above the existing notes; existing text is kept as-is." : "Sets the first note."}</dd>
+            <dd>{change}</dd>
           </dl>
-          <div>
-            <div className="block-label">New value</div>
-            <div className="preview">
-              <mark>{entryLine}</mark>
-              {rest}
-            </div>
-          </div>
+          {children}
           {error && <div className="banner-err">Not written: {error}</div>}
         </div>
         <div className="modal-foot">

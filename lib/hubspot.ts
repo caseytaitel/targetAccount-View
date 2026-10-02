@@ -1,16 +1,33 @@
 /**
  * HubSpot I/O. Server-side only: it reads HUBSPOT_TOKEN, which must never reach the browser.
  *
- * WRITE RULE: this module exposes exactly one mutating call, appendCompanyNote(), and its
- * PATCH body is built by notesPatchBody() with `notes` as the only key. There is deliberately
- * no generic "update company" helper. The token's write scope covers every company property,
- * so this file is the guard. See CLAUDE.md before adding anything that writes.
+ * WRITE RULE: this module exposes exactly two mutating calls:
+ *   - appendCompanyNote(): PATCH body from notesPatchBody(), `notes` as the only key.
+ *   - setCompanyTerritory(): PATCH body from territoryPatchBody(), `territory` and/or
+ *     `territory_status` only, each checked against the property's live HubSpot options.
+ * There is deliberately no generic "update company" helper. The token's write scope covers
+ * every company property, so this file is the guard. See CLAUDE.md before adding anything that writes.
  *
  * Retry/backoff ported from the CRO dash (cro_kpi/hubspot.py _send/_backoff_seconds).
  */
 
-import { COMPANY_PROPERTIES, HUBSPOT_API, OWNER_IDS, WRITABLE_PROPERTY } from "./config";
+import {
+  CACHE_TTL_MS,
+  COMPANY_PROPERTIES,
+  HUBSPOT_API,
+  OWNER_IDS,
+  TERRITORY_PROPERTIES,
+  WRITABLE_PROPERTY,
+} from "./config";
 import { formatEntry, prependEntry, sameNotes, today, withinLimit } from "./notes";
+import {
+  type EnumOption,
+  type TerritoryChanges,
+  type TerritoryOptions,
+  type TerritoryValues,
+  invalidOption,
+  territoryPatchBody,
+} from "./territory";
 import type { RawProps } from "./accounts";
 
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
@@ -34,6 +51,14 @@ export class NotesConflictError extends Error {
   constructor(readonly current: string) {
     super("Notes changed in HubSpot since they were loaded.");
     this.name = "NotesConflictError";
+  }
+}
+
+/** Someone changed `territory` / `territory_status` in HubSpot after the row was loaded. */
+export class TerritoryConflictError extends Error {
+  constructor(readonly current: TerritoryValues) {
+    super("Territory changed in HubSpot since it was loaded.");
+    this.name = "TerritoryConflictError";
   }
 }
 
@@ -224,4 +249,71 @@ export async function appendCompanyNote(
   );
   const data = (await resp.json()) as { properties?: RawProps };
   return data.properties?.[WRITABLE_PROPERTY] ?? next;
+}
+
+let optionsCache: { at: number; options: TerritoryOptions } | null = null;
+
+/** Live enum options for `territory` and `territory_status` (cached CACHE_TTL_MS). Throws on failure. */
+export async function getTerritoryOptions(force = false): Promise<TerritoryOptions> {
+  if (!force && optionsCache && Date.now() - optionsCache.at < CACHE_TTL_MS) {
+    return optionsCache.options;
+  }
+  const entries = await Promise.all(
+    TERRITORY_PROPERTIES.map(async (p) => {
+      const resp = await send("GET", `/crm/v3/properties/companies/${p}`, `${p} options`);
+      const data = (await resp.json()) as { options?: (EnumOption & { hidden?: boolean })[] };
+      const opts = (data.options ?? []).filter((o) => !o.hidden).map((o) => ({ value: o.value, label: o.label }));
+      return [p, opts] as const;
+    }),
+  );
+  const options = Object.fromEntries(entries) as TerritoryOptions;
+  optionsCache = { at: Date.now(), options };
+  return options;
+}
+
+/** Current `territory` and `territory_status` for one company ("" when empty). */
+export async function getCompanyTerritory(companyId: string): Promise<TerritoryValues> {
+  const resp = await send(
+    "GET",
+    `/crm/v3/objects/companies/${encodeURIComponent(companyId)}?properties=${TERRITORY_PROPERTIES.join(",")}`,
+    "territory read",
+  );
+  const data = (await resp.json()) as { properties?: RawProps };
+  return {
+    territory: (data.properties?.territory ?? "").trim(),
+    territory_status: (data.properties?.territory_status ?? "").trim(),
+  };
+}
+
+/**
+ * Set `territory` and/or `territory_status` on one company (Data Hygiene tab). Every value must
+ * be a live HubSpot option. Re-reads both properties first and refuses (TerritoryConflictError)
+ * if either no longer matches what the user was shown. Returns both values after the write.
+ */
+export async function setCompanyTerritory(
+  companyId: string,
+  changes: TerritoryChanges,
+  expected: TerritoryValues,
+): Promise<TerritoryValues> {
+  if (!/^\d+$/.test(companyId)) {
+    throw new HubSpotError("Invalid company id.", 400);
+  }
+  const body = territoryPatchBody(changes);
+  if (!Object.keys(body.properties).length) {
+    throw new HubSpotError("Nothing to change.", 400);
+  }
+  const bad = invalidOption(changes, await getTerritoryOptions());
+  if (bad) {
+    throw new HubSpotError(bad, 400);
+  }
+  const current = await getCompanyTerritory(companyId);
+  if (TERRITORY_PROPERTIES.some((p) => current[p] !== expected[p].trim())) {
+    throw new TerritoryConflictError(current);
+  }
+  const resp = await send("PATCH", `/crm/v3/objects/companies/${encodeURIComponent(companyId)}`, "territory write", body);
+  const data = (await resp.json()) as { properties?: RawProps };
+  return {
+    territory: (data.properties?.territory ?? body.properties.territory ?? current.territory).trim(),
+    territory_status: (data.properties?.territory_status ?? body.properties.territory_status ?? current.territory_status).trim(),
+  };
 }

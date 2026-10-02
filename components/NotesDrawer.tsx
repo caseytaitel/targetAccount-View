@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { Account } from "@/lib/accounts";
+import { WRITABLE_PROPERTY } from "@/lib/config";
 import { ENTRY_MAX_LENGTH, formatEntry, prependEntry, today } from "@/lib/notes";
 
 import ConfirmWriteModal from "./ConfirmWriteModal";
@@ -75,7 +76,7 @@ export default function NotesDrawer({
   const entryLine = formatEntry(user || "unknown", today(), entry);
   const proposed = current === null ? "" : prependEntry(current, entryLine);
 
-  /** The only HubSpot write in the app. Called solely from the modal's confirm button. */
+  /** HubSpot notes write. Called solely from the modal's confirm button. */
   const write = async () => {
     if (current === null) {
       return;
@@ -190,14 +191,25 @@ export default function NotesDrawer({
       {confirming && current !== null && (
         <ConfirmWriteModal
           companyName={account.name}
-          current={current}
-          entryLine={entryLine}
-          proposed={proposed}
+          properties={[WRITABLE_PROPERTY]}
+          change={
+            current.trim()
+              ? "Adds one entry above the existing notes; existing text is kept as-is."
+              : "Sets the first note."
+          }
           writing={writing}
           error={writeError}
           onCancel={() => setConfirming(false)}
           onConfirm={write}
-        />
+        >
+          <div>
+            <div className="block-label">New value</div>
+            <div className="preview">
+              <mark>{entryLine}</mark>
+              {proposed.slice(entryLine.length)}
+            </div>
+          </div>
+        </ConfirmWriteModal>
       )}
     </>
   );

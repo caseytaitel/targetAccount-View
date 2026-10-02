@@ -3,34 +3,32 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { type Account, type Tag, bucket, compactCount } from "@/lib/accounts";
-import {
-  OUTREACH_OWNERS,
-  OUTREACH_STATUSES,
-  OUT_TAB,
-  TAGS,
-  TERRITORIES,
-  TIERS,
-  type TabKey,
-  type TagKey,
-} from "@/lib/config";
+import { OUTREACH_OWNERS, OUTREACH_STATUSES, OUT_TAB, TERRITORIES, TIERS, type TabKey } from "@/lib/config";
 import type { BoardData } from "@/lib/load";
 import { today } from "@/lib/notes";
+import { DEFAULT_SORT, type Sort, type SortKey, comparator, isSort, nextSort } from "@/lib/sort";
 import type { AccountState, StateField } from "@/lib/state";
+import { type TerritoryValues, needsHygiene } from "@/lib/territory";
 
+import HygieneTable from "./HygieneTable";
 import NotesDrawer from "./NotesDrawer";
+import SortTh from "./SortTh";
 
-type SortKey = "owner" | "tags" | "name";
+/** The territory tabs plus the Data Hygiene view, which is a cross-cut, not a bucket. */
+const HYGIENE = "hygiene" as const;
+type View = TabKey | typeof HYGIENE;
 type Tip = { lines: string[]; x: number; y: number };
 type SectionKey = (typeof TIERS)[number] | "untiered" | "revisit";
 
-const TAB_LABEL: Record<TabKey, string> = {
+const TAB_LABEL: Record<View, string> = {
   Northeast: "Northeast",
   "NY / NJ": "NY / NJ",
   "Mid-Atlantic": "Mid-Atlantic",
   Northwest: "Northwest",
   [OUT_TAB]: "Out of Territory",
+  [HYGIENE]: "Data Hygiene",
 };
-const TAB_ORDER: TabKey[] = [...TERRITORIES, OUT_TAB];
+const TAB_ORDER: View[] = [...TERRITORIES, OUT_TAB, HYGIENE];
 
 const SECTIONS: { key: SectionKey; label: string; def?: string }[] = [
   { key: "A", label: "Tier A" },
@@ -57,24 +55,11 @@ function writePref(key: string, value: unknown): void {
   }
 }
 
-function sorter(sort: SortKey) {
-  return (a: Account, b: Account): number => {
-    if (sort === "owner") {
-      return a.ownerName.localeCompare(b.ownerName) || a.name.localeCompare(b.name);
-    }
-    if (sort === "tags") {
-      return b.tags.length - a.tags.length || a.name.localeCompare(b.name);
-    }
-    return a.name.localeCompare(b.name);
-  };
-}
-
 export default function Board({ initial, user }: { initial: BoardData; user: string }) {
   const [data, setData] = useState(initial);
   const [stateMap, setStateMap] = useState<Record<string, AccountState>>(initial.state);
-  const [tab, setTab] = useState<TabKey>(TERRITORIES[0]);
-  const [sort, setSort] = useState<SortKey>("name");
-  const [tagFilter, setTagFilter] = useState<TagKey[]>([]);
+  const [tab, setTab] = useState<View>(TERRITORIES[0]);
+  const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
   const [ownerFilter, setOwnerFilter] = useState<string>("");
   const [outreachFilter, setOutreachFilter] = useState<string>("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ revisit: true });
@@ -87,11 +72,12 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
 
   // Restore per-viewer prefs after mount (localStorage is not available during SSR).
   useEffect(() => {
-    const t = readPref<TabKey>("tab", TERRITORIES[0]);
+    const t = readPref<View>("tab", TERRITORIES[0]);
     if (TAB_ORDER.includes(t)) {
       setTab(t);
     }
-    setSort(readPref<SortKey>("sort", "name"));
+    const s = readPref<unknown>("colsort", DEFAULT_SORT);
+    setSort(isSort(s) ? s : DEFAULT_SORT);
     setCollapsed(readPref("collapsed", { revisit: true }));
   }, []);
 
@@ -123,24 +109,31 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
   }, [data.accounts]);
 
   const unmapped = byTab.get(null) ?? [];
+  const hygiene = useMemo(() => data.accounts.filter(needsHygiene), [data.accounts]);
 
-  const sections = useMemo(() => {
-    const rows = (byTab.get(tab) ?? []).filter((a) => {
-      const st = stateMap[a.id] ?? {};
+  const passesFilters = useCallback(
+    (a: Account) => {
       if (ownerFilter && a.ownerId !== ownerFilter) {
         return false;
       }
       if (outreachFilter) {
-        const o = st.outreach_owner ?? "";
+        const o = stateMap[a.id]?.outreach_owner ?? "";
         if (outreachFilter === "none" ? o !== "" : o !== outreachFilter) {
           return false;
         }
       }
-      if (tagFilter.length && !a.tags.some((t) => tagFilter.includes(t.key))) {
-        return false;
-      }
       return true;
-    });
+    },
+    [ownerFilter, outreachFilter, stateMap],
+  );
+
+  const hygieneRows = useMemo(
+    () => hygiene.filter(passesFilters).sort(comparator(sort, stateMap)),
+    [hygiene, passesFilters, sort, stateMap],
+  );
+
+  const sections = useMemo(() => {
+    const rows = tab === HYGIENE ? [] : (byTab.get(tab) ?? []).filter(passesFilters);
     const out: Record<SectionKey, Account[]> = { A: [], B: [], C: [], untiered: [], revisit: [] };
     for (const a of rows) {
       const st = stateMap[a.id] ?? {};
@@ -152,7 +145,7 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
         out.untiered.push(a);
       }
     }
-    const cmp = sorter(sort);
+    const cmp = comparator(sort, stateMap);
     for (const k of Object.keys(out) as SectionKey[]) {
       out[k].sort(cmp);
     }
@@ -161,16 +154,19 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
       (a, b) => (stateMap[a.id]?.revisit_on ?? "").localeCompare(stateMap[b.id]?.revisit_on ?? "") || cmp(a, b),
     );
     return { out, shown: rows.length };
-  }, [byTab, tab, stateMap, ownerFilter, outreachFilter, tagFilter, sort, todayIso]);
+  }, [byTab, tab, stateMap, passesFilters, sort, todayIso]);
 
-  const chooseTab = (t: TabKey) => {
+  const chooseTab = (t: View) => {
     setTab(t);
     writePref("tab", t);
   };
-  const chooseSort = (s: SortKey) => {
-    setSort(s);
-    writePref("sort", s);
-  };
+  const chooseSort = useCallback((k: SortKey) => {
+    setSort((prev) => {
+      const next = nextSort(prev, k);
+      writePref("colsort", next);
+      return next;
+    });
+  }, []);
   const toggleSection = (k: SectionKey) => {
     setCollapsed((prev) => {
       const next = { ...prev, [k]: !prev[k] };
@@ -178,8 +174,6 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
       return next;
     });
   };
-  const toggleTag = (k: TagKey) =>
-    setTagFilter((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -248,6 +242,16 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
     setData((d) => ({ ...d, accounts: d.accounts.map((a) => (a.id === id ? { ...a, notes } : a)) }));
   }, []);
 
+  const onTerritoryWritten = useCallback((id: string, v: TerritoryValues) => {
+    setData((d) => ({
+      ...d,
+      accounts: d.accounts.map((a) =>
+        a.id === id ? { ...a, territory: v.territory, territoryStatus: v.territory_status } : a,
+      ),
+    }));
+  }, []);
+  const notify = useCallback((msg: string, err?: boolean) => setToast({ msg, err }), []);
+
   const showTip = (lines: string[], el: HTMLElement) => {
     const r = el.getBoundingClientRect();
     const x = Math.max(8, Math.min(r.left, window.innerWidth - 348));
@@ -255,10 +259,12 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
   };
 
   const isOut = tab === OUT_TAB;
+  const isHygiene = tab === HYGIENE;
   const colCount = isOut ? 11 : 10;
   const notesAccount = notesFor ? data.accounts.find((a) => a.id === notesFor) : undefined;
   const refreshedAt = new Date(data.fetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  const filtersOn = tagFilter.length > 0 || ownerFilter !== "" || outreachFilter !== "";
+  const filtersOn = ownerFilter !== "" || outreachFilter !== "";
+  const tabCount = (t: View) => (t === HYGIENE ? hygiene.length : (byTab.get(t) ?? []).length);
 
   return (
     <div className="container">
@@ -291,39 +297,14 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
               aria-selected={tab === t}
               className={`tab${tab === t ? " active" : ""}${t === OUT_TAB ? " tab-split" : ""}`}
               onClick={() => chooseTab(t)}
+              title={t === HYGIENE ? "Accounts with a blank Territory or Territory Status in HubSpot" : undefined}
             >
-              {TAB_LABEL[t]} <span className="cz">· {(byTab.get(t) ?? []).length}</span>
+              {TAB_LABEL[t]} <span className="cz">· {tabCount(t)}</span>
             </button>
           ))}
         </nav>
 
         <div className="filter-bar">
-          <div className="fgroup">
-            <span className="flabel">Sort</span>
-            {(
-              [
-                ["name", "Name"],
-                ["owner", "Company Owner"],
-                ["tags", "Company Tags"],
-              ] as const
-            ).map(([k, l]) => (
-              <button key={k} className={`fb${sort === k ? " active" : ""}`} onClick={() => chooseSort(k)}>
-                {l}
-              </button>
-            ))}
-          </div>
-          <div className="fgroup">
-            <span className="flabel">Tags</span>
-            {TAGS.map((t) => (
-              <button
-                key={t.key}
-                className={`fb${tagFilter.includes(t.key) ? " active" : ""}`}
-                onClick={() => toggleTag(t.key)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
           <div className="fgroup">
             <span className="flabel">Owner</span>
             <button className={`fb${ownerFilter === "" ? " active" : ""}`} onClick={() => setOwnerFilter("")}>
@@ -356,16 +337,26 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
             <button
               className="fb-clear"
               onClick={() => {
-                setTagFilter([]);
                 setOwnerFilter("");
                 setOutreachFilter("");
               }}
             >
-              Clear filters · {sections.shown} shown
+              Clear filters · {isHygiene ? hygieneRows.length : sections.shown} shown
             </button>
           )}
         </div>
 
+        {isHygiene ? (
+          <HygieneTable
+            rows={hygieneRows}
+            options={data.territoryOptions}
+            sort={sort}
+            onSort={chooseSort}
+            onWritten={onTerritoryWritten}
+            onNotes={setNotesFor}
+            onToast={notify}
+          />
+        ) : (
         <div className="pane" onScroll={() => setTip(null)}>
           <table>
             <colgroup>
@@ -383,17 +374,18 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
             </colgroup>
             <thead>
               <tr>
-                <th>Company Name</th>
-                <th>Company Owner</th>
-                <th>Industry</th>
-                <th className="r">Size</th>
-                <th>Company Tags</th>
-                {isOut && <th>Territory / Status</th>}
+                <SortTh k="name" label="Company Name" sort={sort} onSort={chooseSort} />
+                <SortTh k="owner" label="Company Owner" sort={sort} onSort={chooseSort} />
+                <SortTh k="industry" label="Industry" sort={sort} onSort={chooseSort} />
+                <SortTh k="size" label="Size" sort={sort} onSort={chooseSort} right />
+                <SortTh k="tags" label="Company Tags" sort={sort} onSort={chooseSort} />
+                {isOut && <SortTh k="territory" label="Territory / Status" sort={sort} onSort={chooseSort} />}
+                {/* No sort on Tier: rows are already grouped into tier sections. */}
                 <th>Tier</th>
-                <th>Outreach Owner</th>
-                <th>Outreach Status</th>
-                <th>Revisit</th>
-                <th>Notes</th>
+                <SortTh k="outreach_owner" label="Outreach Owner" sort={sort} onSort={chooseSort} />
+                <SortTh k="outreach_status" label="Outreach Status" sort={sort} onSort={chooseSort} />
+                <SortTh k="revisit" label="Revisit" sort={sort} onSort={chooseSort} />
+                <SortTh k="notes" label="Notes" sort={sort} onSort={chooseSort} />
               </tr>
             </thead>
             {SECTIONS.map((s) => {
@@ -442,11 +434,13 @@ export default function Board({ initial, user }: { initial: BoardData; user: str
             })}
           </table>
         </div>
+        )}
       </div>
 
       <footer className="footer">
         <span>
-          HubSpot is read-only here except company Notes, which are written only after you confirm.
+          HubSpot is read-only here except company Notes and, on Data Hygiene, Territory and Territory
+          Status. Each is written only after you confirm.
           {data.storeMode === "memory" && (
             <span className="qflag" title="No Redis env vars found, so tier/outreach/revisit edits live in this dev server's memory and are lost on restart.">
               {" "}⚑ dev store (not saved)
@@ -523,7 +517,7 @@ function Row({
             {a.name}
           </a>
           {!a.territoryStatus && (
-            <span className="qflag" title="Territory Status is not set in HubSpot. Shown here by its Territory.">
+            <span className="qflag" title="Territory Status is not set in HubSpot. Shown here by its Territory; set it on the Data Hygiene tab.">
               {" "}⚑
             </span>
           )}
